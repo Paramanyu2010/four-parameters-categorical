@@ -2,5 +2,66 @@
 title: "Four Parameters Categorical"
 author: "Paramanyu Gupta"
 format: html
+execute: 
+  echo: false
 ---
 
+```{r}
+#| message: false
+library(tidyverse)
+library(primer.data)
+library(tidymodels)
+library(broom)
+```
+
+Understanding the voter preference of different genders is essential for a candidate to design a campaign strategy. This analysis, using data from the 1992 American National Election Studies (NES) survey, investigates whether there was a discernible difference in presidential vote choice between men and women during that election. However, the representativeness of the 1992 survey data to the broader voting population may limit the generalizability of our findings. A potential weakness of this model is that changes in voter demographics and political issues since 1992 may limit the stability and representativeness of the historical data for current predictions. We model presidential vote preference as a multinomial logistic function of sex.
+
+$$P(Y = k) = \frac{e^{\beta_{k0} + \beta_{k1} X_1 + \beta_{k2} X_2 + \cdots + \beta_{kn} X_n}}{\sum_{j=1}^{K} e^{\beta_{j0} + \beta_{j1} X_1 + \beta_{j2} X_2 + \cdots + \beta_{jn} X_n}}$$
+with $Y \sim \text{Multinomial}(\boldsymbol{\rho})$ where $\boldsymbol{\rho} = (\rho_1, \rho_2, \ldots, \rho_K)$ are the probabilities above.
+
+$$
+\begin{aligned}
+\hat{P}(\text{Clinton}) &= \frac{e^{0.45 - 0.25 \cdot \text{sexMale}}}{1 + e^{0.45 - 0.25 \cdot \text{sexMale}}} \\
+\hat{P}(\text{Perot})   &= \frac{e^{-0.85 + 0.42 \cdot \text{sexMale}}}{1 + e^{-0.85 + 0.42 \cdot \text{sexMale}}} \\
+\hat{P}(\text{Bush})    &= 1 - \hat{P}(\text{Clinton}) - \hat{P}(\text{Perot})
+\end{aligned}
+$$
+
+```{r}
+#| cache: true
+# Create the nes_92 dataset
+nes_92 <- nes |> 
+  filter(year == 1992) |> 
+  select(sex, pres_vote) |> 
+  drop_na() |> 
+  mutate(pres_vote = as.factor(case_when(
+    pres_vote == "Democrat" ~ "Clinton",
+    pres_vote == "Republican" ~ "Bush",
+    pres_vote == "Third Party" ~ "Perot",
+    TRUE ~ as.character(pres_vote) # Robustness for other values, if any
+  )))
+```
+
+```{r}
+#| cache: true
+fit_nes <- multinom_reg(engine = "nnet") |>
+  fit(pres_vote ~ sex, data = nes_92)
+```
+
+
+```{r}
+#| echo: false
+#| results: asis
+
+# Assuming you added library(kableExtra) to your setup chunk if you plan to use add_header_above
+# If not, add it: library(kableExtra)
+
+model_summary_table <- tidy(fit_nes, conf.int = TRUE)
+
+knitr::kable(model_summary_table, 
+             caption = "Estimated Coefficients for Multinomial Logistic Regression Model of Presidential Vote by Sex (Data Source: 1992 NES Survey)",
+             digits = 3) #|>
+  # kableExtra::add_header_above(c(" " = 1, "Clinton vs. Bush (Reference)" = 3, "Perot vs. Bush (Reference)" = 3)) 
+  # Uncomment the kableExtra line if your output has two sets of coefficients and you want this header style.
+  # The output structure from `tidy()` will determine if this header is appropriate.
+```
